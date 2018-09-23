@@ -4,10 +4,16 @@
 
 class vote : public eosio::contract {
    public:
-      using contract::contract;
+      vote( account_name s ):
+         contract( s ),   // initialization of the base class for the contract
+         _shareholders( s, s ), // initialize the table with code and scope NB! Look up definition of code and scope   
+         _products( s, s ),
+         _transactions( s, s )
+      {
+      }
 
       /// @abi action
-      void create_shareholder ( account_name owner, std::string& note ) {
+      void createshh ( account_name owner, std::string& note ) {
          require_auth( owner );
 
          eosio_assert( _shareholders.find( owner ) == _shareholders.end(), "This shareholder already exists in the db" );
@@ -20,7 +26,7 @@ class vote : public eosio::contract {
       }
 
       /// @abi action
-      void create_product ( account_name product, std::map<account_name, double> owners, uint64_t publickey, std::string& note ) {
+      void createpr ( account_name product, std::map<account_name, double> owners, uint64_t publickey, std::string& note ) {
          // also update shareholders shares table 
          require_auth( product );
 
@@ -34,7 +40,7 @@ class vote : public eosio::contract {
 
             auto itr = _shareholders.find( owner );
             _shareholders.modify( itr, owner, [&]( auto& sharehldr ) {
-                  sharehldr.shares.insert(product, amount);
+                  sharehldr.shares.insert(std::make_pair(product, amount));
             });
          }
 
@@ -47,7 +53,7 @@ class vote : public eosio::contract {
       }
 
       /// @abi action
-      void start_transaction ( account_name buyer, account_name product, double amount ) {
+      void starttr ( account_name buyer, account_name product, double amount ) {
          // require_auth( product );
 
          eosio_assert( _shareholders.find( buyer ) != _shareholders.end(), "No shareholder found in the db" );
@@ -59,7 +65,7 @@ class vote : public eosio::contract {
          //std::pair<account_name,account_name> pr (buyer, product);
          auto itr = _transactions.find( product );
          // create transaction with the input
-         _transactions.emplace( itr, product, [&]( auto& trnsctn ) {
+         _transactions.emplace( product, [&]( auto& trnsctn ) {
             trnsctn.product      = product;
             trnsctn.buyer        = buyer;
             trnsctn.amount       = amount;
@@ -68,7 +74,7 @@ class vote : public eosio::contract {
       }
 
       /// @abi action
-      void vote_transaction ( account_name owner, account_name buyer, account_name product, uint64_t votes ) {
+      void votetr ( account_name owner, account_name buyer, account_name product, uint64_t votes ) {
          // get transaction, modify votes
          //std::pair<account_name,account_name> pr (buyer, product);
          auto itr = _transactions.find( product );
@@ -80,13 +86,13 @@ class vote : public eosio::contract {
       }
 
       /// @abi action
-      void finalize_transaction ( account_name product, account_name buyer, bool to_sell ) {
+      void finaltr ( account_name product, account_name buyer, bool to_sell ) {
          // get transaction, make decision to sell, update shares
          // require_auth( product );
          auto itr_transaction = _transactions.find( product );
          auto itr_product = _products.find( product );
          if ( to_sell ) {
-            double sell_amount = itr_transaction.amount;
+            double sell_amount = itr_transaction->amount;
             for (auto const& x : itr_product->owners) {
                account_name owner = x.first;
                double amount = x.second;
@@ -116,7 +122,7 @@ class vote : public eosio::contract {
          //std::pair<account_name,account_name> pr (buyer, product);
          auto itr = _transactions.find( product );
 
-         _transactions.modify( itr_transaction, [&]( auto& trnsctn ) {
+         _transactions.modify( itr_transaction, product, [&]( auto& trnsctn ) {
             trnsctn.to_sell = to_sell;
          });
          // make sell decision
@@ -180,4 +186,4 @@ class vote : public eosio::contract {
       transaction_table _transactions;
 };
 
-EOSIO_ABI( vote, (create_shareholder)(create_product)(start_transaction)(vote_transaction)(finalize_transaction) )
+EOSIO_ABI( vote, (createshh)(createpr)(starttr)(votetr)(finaltr) )
