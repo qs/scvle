@@ -28,21 +28,21 @@ const accounts = [
   {"name":"useraaaaaaag", "privateKey":"5KFyaxQW8L6uXFB6wSgC44EsAbzC7ideyhhQ68tiYfdKQp69xKo", "publicKey":"EOS8Du668rSVDE3KkmhwKkmAyxdBd73B51FKE7SjkKe5YERBULMrw"}
 ];
 
-const keys = paillier.generateKeys(1024);
+const keys = paillier.generateKeys(32);  //1024
 const publicKey = keys.pub;
 const privateKey = keys.sec;
 
-const mockProducts = [
+let mockProducts = [
     {"product": "productacc", "owners": {"shareholder1acc": 30, "shareholder2acc": 70}}
 ];
 
-const mockShareholders = [
+let mockShareholders = [
     {"shareholder": "shareholder1acc", "shares": {"productacc": 30}},
     {"shareholder": "shareholder2acc", "shares": {"productacc": 70}},
     {"shareholder": "buyeracc", "shares": {}}
 ];
 
-const mockTransactions = [
+let mockTransactions = [
     {
         "product": "productacc",
         "buyer": "buyeracc",
@@ -256,8 +256,28 @@ class Product extends Component {
         }).then(result => this.setState({ transactionTable: result.rows }));
     }
 
+    onFinalize() {
+        let transaction = mockTransactions[0];
+        mockShareholders[0].shares = {"productacc": 30 - 3};
+        mockShareholders[1].shares = {"productacc": 70 - 7};
+        mockShareholders[2].shares = {"productacc": 10};
+
+        mockProducts[0].owners = {"shareholder1acc": 27, "shareholder2acc": 63, "buyeracc": 10};
+
+        this.setState({
+            productTable: mockProducts,
+            transactionTable: mockTransactions
+        });
+    }
+
     render() {
         const { transactionTable } = this.state;
+        console.log('##########');
+        let v = publicKey.encrypt(new jsbn.BigInteger('1'));
+        v = publicKey.add(v,
+            publicKey.encrypt(new jsbn.BigInteger('100')));
+        let result = privateKey.decrypt(v).toString(10);
+        console.log('++++++', result, v, new jsbn.BigInteger(v));
 
         const generateCard = (product, buyer, amount, votes) => {
             return (
@@ -267,32 +287,34 @@ class Product extends Component {
                             {product} - {buyer} - {amount}
                         </Typography>
                         <Typography>
-                            Votes: {privateKey.decrypt(new jsbn.BigInteger(votes)).toString(10)}
+                            Votes: {privateKey.decrypt(votes).toString(10)}
                         </Typography>
                         <Typography>
                             <Button
                                 variant="contained"
                                 color="primary"
-                                type="submit">
-                                Accept
+                                type="submit"
+                                onClick={() => this.onFinalize()}>
+                                Finalize
                             </Button>&nbsp;&nbsp;
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                type="submit">
-                                Reject
-                            </Button>
                         </Typography>
                     </CardContent>
                 </Card>
             );
         };
 
-        let transactionCards = transactionTable.map(item =>
+        let transactionCards = mockTransactions.map(item =>
             generateCard(item.product, item.buyer, item.amount, item.votes));
 
+        let productShares = [];
+        for(var key in mockProducts[0].owners) {
+            productShares.push(key + " - " + mockProducts[0].owners[key]);
+        }
+
         return <div>
-            <h2>Product transaction state</h2>
+            <h2>Product shares</h2>
+            {productShares.join(' | ')}
+            <h4>Product transaction state</h4>
             {transactionCards}
         </div>;
     }
@@ -420,61 +442,8 @@ class Shareholder1 extends Component {
         super(props);
         this.state = {
             productTable: mockProducts,
-            transactionTable: mockTransactions
-        };
-        //this.handleFormEvent = this.handleFormEvent.bind(this);
-    }
-
-    render() {
-        const { transactionTable } = this.state;
-
-        const generateCard = (product, buyer, amount, votes) => {
-            return (
-                <Card key={product}>
-                    <CardContent>
-                        <Typography variant="headline" component="h3">
-                            {product} - {buyer} - {amount}
-                        </Typography>
-                        <Typography>
-                            Votes (encrypted): {votes.toString()}
-                        </Typography>
-                        <Typography>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                type="submit">
-                                Accept
-                            </Button>&nbsp;&nbsp;
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                type="submit">
-                                Reject
-                            </Button>
-                        </Typography>
-                    </CardContent>
-                </Card>
-            );
-        };
-
-        let transactionCards = transactionTable.map(item =>
-            generateCard(item.product, item.buyer, item.amount, item.votes));
-
-        return <div>
-            <h2>Transactions to vote</h2>
-            {transactionCards}
-        </div>
-    }
-}
-
-class Shareholder2 extends Component {
-
-    constructor(props) {
-        super(props);
-        this.state = {
-            productTable: mockProducts,
             transactionTable: mockTransactions,
-            shareholder: mockShareholders[1]
+            shareholder: mockShareholders[0]
         };
         //this.handleFormEvent = this.handleFormEvent.bind(this);
     }
@@ -482,9 +451,11 @@ class Shareholder2 extends Component {
     onAccept() {
         const { transactionTable } = this.state;
         const transaction = transactionTable[0];
-        transaction.votes = publicKey.add(transaction.votes, publicKey.encrypt(new jsbn.BigInteger(this.state.shareholder.shares[this.state.productTable[0].product].toString())));
-        console.log('---------', this.state);
-        mockTransactions[0].votes = transaction.votes;
+        console.log('---------', mockTransactions[0].votes);
+        mockTransactions[0].votes = publicKey.add(
+            mockTransactions[0].votes,
+            publicKey.encrypt(new jsbn.BigInteger(this.state.shareholder.shares[this.state.productTable[0].product].toString())));
+        console.log('---------', mockTransactions[0].votes);
         this.setState({transactionTable: [transaction]})
     }
 
@@ -525,7 +496,73 @@ class Shareholder2 extends Component {
             generateCard(item.product, item.buyer, item.amount, item.votes));
 
         return <div>
-            <h2>Transactions to vote</h2>
+            <h2>Shareholder1: Transactions to vote</h2>
+            {transactionCards}
+        </div>
+    }
+}
+
+class Shareholder2 extends Component {
+
+    constructor(props) {
+        super(props);
+        this.state = {
+            productTable: mockProducts,
+            transactionTable: mockTransactions,
+            shareholder: mockShareholders[1]
+        };
+        //this.handleFormEvent = this.handleFormEvent.bind(this);
+    }
+
+    onAccept() {
+        const { transactionTable } = this.state;
+        const transaction = transactionTable[0];
+        console.log('---------', mockTransactions[0].votes);
+        mockTransactions[0].votes = publicKey.add(
+            mockTransactions[0].votes,
+            publicKey.encrypt(new jsbn.BigInteger(this.state.shareholder.shares[this.state.productTable[0].product].toString())));
+        console.log('---------', mockTransactions[0].votes);
+        this.setState({transactionTable: [transaction]})
+    }
+
+    render() {
+        const { transactionTable } = this.state;
+
+        const generateCard = (product, buyer, amount, votes) => {
+            return (
+                <Card key={product}>
+                    <CardContent>
+                        <Typography variant="headline" component="h3">
+                            {product} - {buyer} - {amount}
+                        </Typography>
+                        <Typography>
+                            Votes (encrypted): {votes.toString()}
+                        </Typography>
+                        <Typography>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                type="submit"
+                                onClick={() => this.onAccept()}>
+                                Accept
+                            </Button>&nbsp;&nbsp;
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                type="submit">
+                                Reject
+                            </Button>
+                        </Typography>
+                    </CardContent>
+                </Card>
+            );
+        };
+
+        let transactionCards = transactionTable.map(item =>
+            generateCard(item.product, item.buyer, item.amount, item.votes));
+
+        return <div>
+            <h2>Shareholder2: Transactions to vote</h2>
             {transactionCards}
         </div>
     }
